@@ -1,3 +1,5 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+
 from agent.base_agent import AgentSystem
 from agent.llm_withtools import chat_with_agent
 
