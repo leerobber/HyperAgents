@@ -10,20 +10,34 @@ load_dotenv()
 
 MAX_TOKENS = 16384
 
-CLAUDE_MODEL = "anthropic/claude-sonnet-4-5-20250929"
-CLAUDE_HAIKU_MODEL = "anthropic/claude-3-haiku-20240307"
-CLAUDE_35NEW_MODEL = "anthropic/claude-3-5-sonnet-20241022"
-OPENAI_MODEL = "openai/gpt-4o"
-OPENAI_MINI_MODEL = "openai/gpt-4o-mini"
-OPENAI_O3_MODEL = "openai/o3"
-OPENAI_O3MINI_MODEL = "openai/o3-mini"
-OPENAI_O4MINI_MODEL = "openai/o4-mini"
-OPENAI_GPT52_MODEL = "openai/gpt-5.2"
-OPENAI_GPT5_MODEL = "openai/gpt-5"
-OPENAI_GPT5MINI_MODEL = "openai/gpt-5-mini"
-GEMINI_3_MODEL = "gemini/gemini-3-pro-preview"
-GEMINI_MODEL = "gemini/gemini-2.5-pro"
-GEMINI_FLASH_MODEL = "gemini/gemini-2.5-flash"
+# ============================================================
+# Sovereign Core — Local Qwen2.5-32B-AWQ Integration
+# All model calls route to localhost:8001 via litellm's
+# OpenAI-compatible endpoint support.
+#
+# Set in .env:
+#   OPENAI_API_KEY=not-needed
+#   OPENAI_API_BASE=http://localhost:8001/v1
+# ============================================================
+
+SOVEREIGN_MODEL = "openai/qwen2.5-32b-awq"
+SOVEREIGN_FAST_MODEL = "openai/qwen2.5-32b-awq"
+
+# Backward-compatible aliases — existing code references these
+CLAUDE_MODEL = SOVEREIGN_MODEL
+CLAUDE_HAIKU_MODEL = SOVEREIGN_FAST_MODEL
+CLAUDE_35NEW_MODEL = SOVEREIGN_MODEL
+OPENAI_MODEL = SOVEREIGN_MODEL
+OPENAI_MINI_MODEL = SOVEREIGN_FAST_MODEL
+OPENAI_O3_MODEL = SOVEREIGN_MODEL
+OPENAI_O3MINI_MODEL = SOVEREIGN_FAST_MODEL
+OPENAI_O4MINI_MODEL = SOVEREIGN_FAST_MODEL
+OPENAI_GPT52_MODEL = SOVEREIGN_MODEL
+OPENAI_GPT5_MODEL = SOVEREIGN_MODEL
+OPENAI_GPT5MINI_MODEL = SOVEREIGN_FAST_MODEL
+GEMINI_3_MODEL = SOVEREIGN_MODEL
+GEMINI_MODEL = SOVEREIGN_MODEL
+GEMINI_FLASH_MODEL = SOVEREIGN_FAST_MODEL
 
 litellm.drop_params=True
 
@@ -35,7 +49,7 @@ litellm.drop_params=True
 )
 def get_response_from_llm(
     msg: str,
-    model: str = OPENAI_MODEL,
+    model: str = SOVEREIGN_MODEL,
     temperature: float = 0.0,
     max_tokens: int = MAX_TOKENS,
     msg_history=None,
@@ -51,28 +65,13 @@ def get_response_from_llm(
 
     new_msg_history = msg_history + [{"role": "user", "content": msg}]
 
-    # Build kwargs - handle model-specific requirements
+    # Build kwargs — simplified for local Qwen2.5 endpoint
     completion_kwargs = {
         "model": model,
         "messages": new_msg_history,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
     }
-
-    # GPT-5 and GPT-5-mini only support default temperature (1), skip it
-    # GPT-5.2 supports temperature
-    if model in ["openai/gpt-5", "openai/gpt-5-mini"]:
-        pass  # Don't set temperature
-    else:
-        completion_kwargs["temperature"] = temperature
-
-    # GPT-5 models require max_completion_tokens instead of max_tokens
-    if "gpt-5" in model:
-        completion_kwargs["max_completion_tokens"] = max_tokens
-    else:
-        # Claude Haiku has a 4096 token limit
-        if "claude-3-haiku" in model:
-            completion_kwargs["max_tokens"] = min(max_tokens, 4096)
-        else:
-            completion_kwargs["max_tokens"] = max_tokens
 
     response = litellm.completion(**completion_kwargs)
     response_text = response['choices'][0]['message']['content']  # pyright: ignore
@@ -89,28 +88,9 @@ def get_response_from_llm(
 
 if __name__ == "__main__":
     msg = 'Hello there!'
-    models = [
-        ("CLAUDE_MODEL", CLAUDE_MODEL),
-        ("CLAUDE_HAIKU_MODEL", CLAUDE_HAIKU_MODEL),
-        ("CLAUDE_35NEW_MODEL", CLAUDE_35NEW_MODEL),
-        ("OPENAI_MODEL", OPENAI_MODEL),
-        ("OPENAI_MINI_MODEL", OPENAI_MINI_MODEL),
-        ("OPENAI_O3_MODEL", OPENAI_O3_MODEL),
-        ("OPENAI_O3MINI_MODEL", OPENAI_O3MINI_MODEL),
-        ("OPENAI_O4MINI_MODEL", OPENAI_O4MINI_MODEL),
-        ("OPENAI_GPT52_MODEL", OPENAI_GPT52_MODEL),
-        ("OPENAI_GPT5_MODEL", OPENAI_GPT5_MODEL),
-        ("OPENAI_GPT5MINI_MODEL", OPENAI_GPT5MINI_MODEL),
-        ("GEMINI_3_MODEL", GEMINI_3_MODEL),
-        ("GEMINI_MODEL", GEMINI_MODEL),
-        ("GEMINI_FLASH_MODEL", GEMINI_FLASH_MODEL),
-    ]
-    for name, model in models:
-        print(f"\n{'='*50}")
-        print(f"Testing {name}: {model}")
-        print('='*50)
-        try:
-            output_msg, msg_history, info = get_response_from_llm(msg, model=model)
-            print(f"OK: {output_msg[:100]}...")
-        except Exception as e:
-            print(f"FAIL: {str(e)[:200]}")
+    print(f"Testing SOVEREIGN_MODEL: {SOVEREIGN_MODEL}")
+    try:
+        output_msg, msg_history, info = get_response_from_llm(msg, model=SOVEREIGN_MODEL)
+        print(f"OK: {output_msg[:100]}...")
+    except Exception as e:
+        print(f"FAIL: {str(e)[:200]}")
