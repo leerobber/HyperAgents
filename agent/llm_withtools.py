@@ -1,7 +1,7 @@
 import re
 import json
 
-from agent.llm import get_response_from_llm
+from agent.llm import get_response_from_llm, SOVEREIGN_MODEL
 from agent.tools import load_tools
 
 def get_tooluse_prompt(tool_infos=[]):
@@ -90,7 +90,7 @@ def process_tool_call(tools_dict, tool_name, tool_input):
 
 def chat_with_agent(
     msg,
-    model="claude-4-sonnet-genai",
+    model=SOVEREIGN_MODEL,
     msg_history=None,
     logging=print,
     tools_available=[],  # Empty list means no tools, 'all' means all tools

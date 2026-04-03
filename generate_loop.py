@@ -585,7 +585,7 @@ def generate(
                     str(max_generation - current_genid),
                     *(
                         # If domain is polyglot, for a fair comparison with DGM
-                        ["--model", "claude-3-5-sonnet-20241022"] if domains == ["polyglot"] else []
+                        []  # Model defaults to SOVEREIGN_MODEL (Qwen2.5-32B-AWQ) via run_meta_agent.py
                     ),
                 ]
 
