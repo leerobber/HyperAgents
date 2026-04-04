@@ -1,0 +1,299 @@
+# Instincts generated from https://github.com/leerobber/HyperAgents
+# Generated: 2026-04-03T21:42:20.488Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: HyperAgents-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/leerobber/HyperAgents
+---
+
+# HyperAgents Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: feat
+
+## Evidence
+
+- 1 commits analyzed
+- Detected conventional commit pattern
+- Examples: feat: rewire all LLM calls to local Qwen2.5-32B-AWQ endpoint
+
+---
+id: HyperAgents-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/leerobber/HyperAgents
+---
+
+# HyperAgents Commit Length
+
+## Action
+
+Write moderate-length commit messages (~60 characters)
+
+## Evidence
+
+- Average commit message length: 60 chars
+- Based on 1 commits
+
+---
+id: HyperAgents-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/leerobber/HyperAgents
+---
+
+# HyperAgents Naming Files
+
+## Action
+
+Use snake_case naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: snake_case
+
+---
+id: HyperAgents-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/leerobber/HyperAgents
+---
+
+# HyperAgents Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: HyperAgents-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/leerobber/HyperAgents
+---
+
+# HyperAgents Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: HyperAgents-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/leerobber/HyperAgents
+---
+
+# HyperAgents Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: hyperagents-instinct-file-naming
+trigger: "When creating a new Python file"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: leerobber/HyperAgents
+---
+
+# Hyperagents Instinct File Naming
+
+## Action
+
+Name the file using snake_case
+
+## Evidence
+
+- Pattern in namingConventions.files
+
+---
+id: hyperagents-instinct-function-naming
+trigger: "When defining a new function"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: leerobber/HyperAgents
+---
+
+# Hyperagents Instinct Function Naming
+
+## Action
+
+Name the function using camelCase
+
+## Evidence
+
+- Pattern in namingConventions.functions
+
+---
+id: hyperagents-instinct-class-naming
+trigger: "When defining a new class"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: leerobber/HyperAgents
+---
+
+# Hyperagents Instinct Class Naming
+
+## Action
+
+Name the class using PascalCase
+
+## Evidence
+
+- Pattern in namingConventions.classes
+
+---
+id: hyperagents-instinct-constant-naming
+trigger: "When defining a constant"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: leerobber/HyperAgents
+---
+
+# Hyperagents Instinct Constant Naming
+
+## Action
+
+Name the constant using SCREAMING_SNAKE_CASE
+
+## Evidence
+
+- Pattern in namingConventions.constants
+
+---
+id: hyperagents-instinct-import-style
+trigger: "When importing modules within the package"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: leerobber/HyperAgents
+---
+
+# Hyperagents Instinct Import Style
+
+## Action
+
+Use relative imports
+
+## Evidence
+
+- Pattern in importStyle
+
+---
+id: hyperagents-instinct-export-style
+trigger: "When exporting functions or classes from a module"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: leerobber/HyperAgents
+---
+
+# Hyperagents Instinct Export Style
+
+## Action
+
+Use named exports
+
+## Evidence
+
+- Pattern in exportStyle
+
+---
+id: hyperagents-instinct-commit-format
+trigger: "When writing a git commit message"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: leerobber/HyperAgents
+---
+
+# Hyperagents Instinct Commit Format
+
+## Action
+
+Start the message with a conventional commit prefix (e.g., 'feat: ')
+
+## Evidence
+
+- Pattern in commits.prefixes
+- Seen in commit: 'feat: rewire all LLM calls to local Qwen2.5-32B-AWQ endpoint'
+
+---
+id: hyperagents-instinct-commit-length
+trigger: "When writing a git commit message"
+confidence: 0.7
+domain: git
+source: repo-analysis
+source_repo: leerobber/HyperAgents
+---
+
+# Hyperagents Instinct Commit Length
+
+## Action
+
+Keep the commit message concise, around 60 characters
+
+## Evidence
+
+- Pattern in commits.averageLength
+
+---
+id: hyperagents-instinct-test-location
+trigger: "When adding new tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: leerobber/HyperAgents
+---
+
+# Hyperagents Instinct Test Location
+
+## Action
+
+Place test files in a separate test location outside the main source folder
+
+## Evidence
+
+- Pattern in architecture.folderStructure.testLocation
+
