@@ -42,11 +42,13 @@ class AgentGenome:
     memory_strategy: str = "recency"
 
     # ── GPU traits ────────────────────────────────────────────────────────────
-    gpu_enabled: bool = False
+    gpu_enabled: bool = True
     gpu_backend: str = "webgpu"             # "cuda" | "vulkan" | "webgpu" | "cpu"
     gpu_kernel: str = "bfs"                 # "bfs" | "dfs" | "topo" | "shortest"
     gpu_workgroup_size: int = 64
     gpu_iterations: int = 1
+    gpu_prefer_graph: bool = True           # route graph intents (41/43/44/45) to GPU
+    gpu_prefer_planner: bool = False        # route planner intents to GPU when ready
 
     # ── Mutation ──────────────────────────────────────────────────────────────
 
@@ -83,6 +85,8 @@ class AgentGenome:
             gpu_kernel=self.gpu_kernel,
             gpu_workgroup_size=max(32, min(256, self.gpu_workgroup_size + random.randint(-32, 32))),
             gpu_iterations=max(1, self.gpu_iterations + random.randint(-1, 1)),
+            gpu_prefer_graph=self.gpu_prefer_graph,
+            gpu_prefer_planner=self.gpu_prefer_planner,
         )
 
     def mutate_gpu(self) -> "AgentGenome":
@@ -90,7 +94,7 @@ class AgentGenome:
         child = self.mutate(rate=0.0)       # copy everything, no trait noise
         child.gpu_workgroup_size = max(32, min(256, self.gpu_workgroup_size + random.randint(-32, 32)))
         child.gpu_iterations = max(1, self.gpu_iterations + random.randint(-1, 1))
-        child.gpu_pipeline = random.choice(["bfs", "dfs", "shortest", "topo"])
+        child.gpu_kernel = random.choice(["bfs", "dfs", "shortest", "topo"])
         child.gpu_backend = random.choice(["cuda", "vulkan", "webgpu", "cpu"])
         return child
 
@@ -153,6 +157,8 @@ def crossover(g1: AgentGenome, g2: AgentGenome) -> AgentGenome:
         gpu_kernel=random.choice([g1.gpu_kernel, g2.gpu_kernel]),
         gpu_workgroup_size=int((g1.gpu_workgroup_size + g2.gpu_workgroup_size) / 2),
         gpu_iterations=int((g1.gpu_iterations + g2.gpu_iterations) / 2),
+        gpu_prefer_graph=g1.gpu_prefer_graph or g2.gpu_prefer_graph,
+        gpu_prefer_planner=g1.gpu_prefer_planner or g2.gpu_prefer_planner,
     )
 
 
