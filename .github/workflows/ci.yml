@@ -1,0 +1,43 @@
+name: CI — HyperAgents
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  kernel:
+    name: Genome + scheduler tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build planner WASM agent
+        run: |
+          cargo build --release --target wasm32-unknown-unknown \
+            --manifest-path wasm_agents/planner-agent/Cargo.toml
+          cp wasm_agents/planner-agent/target/wasm32-unknown-unknown/release/planner_agent.wasm \
+             wasm_agents/planner_agent.wasm
+
+      - name: Build + install sovereign-core-rs wheel
+        run: |
+          pip install maturin
+          cd sovereign-core-rs && maturin build --release
+          pip install target/wheels/*.whl
+
+      - name: Install dev deps
+        run: pip install -e ".[dev]"
+
+      - name: Run kernel tests
+        run: pytest tests/test_hyper_kernel.py -v --tb=short
