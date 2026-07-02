@@ -1,12 +1,14 @@
 """Tests for HyperAgents kernel integration (genome + scheduler + Rust runtime)."""
+import random
 import pytest
 from pathlib import Path
 
 WASM_DIR = Path(__file__).parent.parent / "wasm_agents"
 
-from hyper.genome import AgentGenome, GenomeRegistry, _next_id
+from hyper.genome import AgentGenome, GenomeRegistry, crossover, _next_id
 from hyper.kernel_bridge import KernelBridge
 from hyper.scheduler import HyperScheduler, TaskResult
+from sovereign_core_rs import BlockBus, NodeRuntime, KernelBlock, SemanticWord
 
 
 # ── AgentGenome ──────────────────────────────────────────────────────────────
@@ -77,7 +79,8 @@ def test_registry_elite_sorted():
     assert elite[0].fitness >= elite[1].fitness
 
 
-def test_registry_next_generation():
+def test_registry_next_generation_legacy():
+    """n= API: returns exactly n children, backward compat."""
     reg = GenomeRegistry()
     for _ in range(3):
         g = _make_genome()
@@ -87,6 +90,19 @@ def test_registry_next_generation():
     assert len(children) == 4
     for child in children:
         assert child.generation >= 1
+
+
+def test_registry_next_generation_new_api():
+    """New API: next_generation(elite_count, children_count) returns elites + children."""
+    reg = GenomeRegistry()
+    for _ in range(4):
+        g = _make_genome()
+        g.fitness = random.random()
+        reg.register(g)
+    result = reg.next_generation(elite_count=2, children_count=3)
+    assert len(result) == 5                 # 2 elites + 3 children
+    for g in result:
+        assert isinstance(g, AgentGenome)
 
 
 # ── KernelBridge ─────────────────────────────────────────────────────────────
@@ -184,3 +200,100 @@ def test_scheduler_leaderboard_ordered(scheduler):
     board = sched.leaderboard()
     scores = [s for _, s in board]
     assert scores == sorted(scores, reverse=True)
+
+
+# ── Evolution operators ───────────────────────────────────────────────────────
+
+def test_genome_has_evolution_fields():
+    g = _make_genome()
+    assert hasattr(g, "temperature")
+    assert hasattr(g, "max_tokens")
+    assert hasattr(g, "cooperate_level")
+    assert hasattr(g, "gpu_enabled")
+
+
+def test_genome_mutate_evolution_fields():
+    g = _make_genome()
+    g.temperature = 0.5
+    g.max_tokens = 1024
+    child = g.mutate(rate=0.1)
+    assert 0.0 <= child.temperature <= 1.0
+    assert child.max_tokens >= 64
+    assert child.generation == g.generation + 1
+
+
+def test_standalone_crossover():
+    g1 = _make_genome("x")
+    g2 = _make_genome("y")
+    g1.temperature = 0.2
+    g2.temperature = 0.8
+    child = crossover(g1, g2)
+    assert 0.1 < child.temperature < 0.9   # blended
+    assert child.genome_id not in (g1.genome_id, g2.genome_id)
+
+
+def test_genome_add_genome_assigns_id():
+    reg = GenomeRegistry()
+    g = _make_genome()
+    g2 = g.mutate()
+    assert g2.genome_id == 0                # not yet registered
+    gid = reg.add_genome(g2)
+    assert g2.genome_id == gid
+    assert gid != 0
+
+
+# ── BlockBus + NodeRuntime ────────────────────────────────────────────────────
+
+def test_blockbus_publish_consume():
+    bus = BlockBus()
+    word = SemanticWord(type_=1, intent=2, channel=0, priority=128,
+                        confidence=60000, payload_ref=7).encode()
+    block = KernelBlock(agent_id=1, genome_id=1, creds_token=0b1111,
+                        task_id=1, words=[word], metrics_ref=0)
+    bus.publish(block)
+    assert bus.size() == 1
+    got = bus.consume()
+    assert got is not None
+    assert got.agent_id == 1
+    assert bus.is_empty()
+
+
+def test_blockbus_fifo():
+    bus = BlockBus()
+    for i in range(5):
+        word = SemanticWord(type_=1, intent=2, channel=0, priority=128,
+                            confidence=60000, payload_ref=i).encode()
+        bus.publish(KernelBlock(agent_id=i, genome_id=1, creds_token=0b1111,
+                                task_id=i, words=[word], metrics_ref=0))
+    ids = [bus.consume().agent_id for _ in range(5)]
+    assert ids == list(range(5))
+
+
+def test_node_runtime_step_once():
+    bus = BlockBus()
+    node = NodeRuntime()
+    node.spawn_agent(genome_id=1)
+    word = SemanticWord(type_=1, intent=2, channel=0, priority=128,
+                        confidence=60000, payload_ref=0).encode()
+    bus.publish(KernelBlock(agent_id=1, genome_id=1, creds_token=0b1111,
+                            task_id=1, words=[word], metrics_ref=0))
+    node.step_once(bus)
+    assert bus.size() >= 1              # at least 1 result block put back
+
+
+def test_node_runtime_shared_bus():
+    """Two NodeRuntimes sharing a bus exchange blocks."""
+    bus = BlockBus()
+    n1 = NodeRuntime()
+    n2 = NodeRuntime()
+    n1.spawn_agent(genome_id=10)
+    n2.spawn_agent(genome_id=20)
+
+    word = SemanticWord(type_=1, intent=2, channel=0, priority=200,
+                        confidence=60000, payload_ref=0).encode()
+    bus.publish(KernelBlock(agent_id=1, genome_id=10, creds_token=0b1111,
+                            task_id=1, words=[word], metrics_ref=0))
+
+    n1.step_once(bus)   # consumes block, produces result block back on bus
+    assert not bus.is_empty()
+    n2.step_once(bus)   # consumes result

@@ -112,7 +112,7 @@ class HyperScheduler:
 
     def evolve(self, n_children: int = 5, mutation_rate: float = 0.1) -> list[AgentGenome]:
         """Breed next generation, register them, spawn kernel agents."""
-        children = self.registry.next_generation(n_children, mutation_rate)
+        children = self.registry.next_generation(n=n_children, mutation_rate=mutation_rate)
         for child in children:
             self.registry.register(child)
             self._spawn_for_genome(child)
