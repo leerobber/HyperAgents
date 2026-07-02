@@ -11,10 +11,11 @@ from hyper.genome import AgentGenome, GenomeRegistry
 from hyper.kernel_bridge import KernelBridge
 
 try:
-    from sovereign_gpu import GpuGraph
+    from sovereign_gpu import GpuGraph, UnifiedGpu
     _HAS_GPU = True
 except ImportError:
-    GpuGraph = None  # type: ignore[assignment,misc]
+    GpuGraph = None      # type: ignore[assignment,misc]
+    UnifiedGpu = None    # type: ignore[assignment,misc]
     _HAS_GPU = False
 
 try:
@@ -26,6 +27,8 @@ except ImportError:
 
 # Graph intents routed to GPU when genome.gpu_enabled + gpu_prefer_graph
 _GPU_GRAPH_INTENTS: frozenset[int] = frozenset({41, 43, 44, 45})
+# Planner intents routed to GPU when genome.gpu_enabled + gpu_prefer_planner
+_GPU_PLAN_INTENTS:  frozenset[int] = frozenset({2})
 
 
 @dataclass
@@ -69,7 +72,11 @@ class HyperScheduler:
         self._task_counter = 0
         self.gpu: Optional["GpuGraph"] = gpu_graph  # type: ignore[type-arg]
         # DgmRuntime for lazy GpuGraph construction; populated via load_dgm_graph()
-        self._dgm: Optional["_DgmRuntime"] = None  # type: ignore[type-arg]
+        self._dgm: Optional["_DgmRuntime"] = None   # type: ignore[type-arg]
+        # UnifiedGpu for planner + backend-switching dispatch
+        self._unified: Optional["UnifiedGpu"] = (   # type: ignore[type-arg]
+            gpu_graph if _HAS_GPU and isinstance(gpu_graph, UnifiedGpu) else None
+        )
 
     def load_dgm_graph(self, dgm: "_DgmRuntime") -> None:  # type: ignore[type-arg]
         """Build (or replace) the GpuGraph from a DgmRuntime's current graph state."""
@@ -103,6 +110,20 @@ class HyperScheduler:
 
         self._task_counter += 1
         task_id = self._task_counter
+
+        # GPU planner path
+        if (
+            self._unified is not None
+            and genome.gpu_enabled
+            and genome.gpu_prefer_planner
+            and intent in _GPU_PLAN_INTENTS
+        ):
+            return self._run_gpu_planner_task(
+                genome=genome,
+                intent=intent,
+                creds_token=genome.to_creds_token(),
+                task_id=task_id,
+            )
 
         # GPU graph path — bypass WASM/Rust when conditions met
         if (
@@ -199,6 +220,31 @@ class HyperScheduler:
             fitness_delta=fitness_delta,
         )
 
+    def _run_gpu_planner_task(
+        self,
+        genome: AgentGenome,
+        intent: int,
+        creds_token: int,
+        task_id: int,
+    ) -> TaskResult:
+        t0 = time.perf_counter()
+        # Serialise a minimal plan request; the WGSL pipeline will flesh this out.
+        plan_bytes = f"intent={intent} genome={genome.genome_id}".encode()
+        out_bytes  = self._unified.plan(plan_bytes)  # type: ignore[union-attr]
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        fitness_delta = float(len(out_bytes)) / 100.0
+        genome.fitness += fitness_delta
+
+        block = _wrap_planner_result(out_bytes, genome.genome_id, creds_token, task_id)
+        return TaskResult(
+            genome_id=genome.genome_id,
+            agent_id=0,
+            task_id=task_id,
+            duration_ms=elapsed_ms,
+            output_words=block.words,
+            fitness_delta=fitness_delta,
+        )
+
     # ── Evolution ─────────────────────────────────────────────────────────────
 
     def evolve(self, n_children: int = 5, mutation_rate: float = 0.1) -> list[AgentGenome]:
@@ -229,6 +275,31 @@ def _wrap_gpu_result(
         priority=128,
         confidence=60000,
         payload_ref=len(out_nodes) & 0xFFFF,
+    ).encode()
+    return KernelBlock(
+        agent_id=0,
+        genome_id=genome_id,
+        creds_token=creds_token,
+        task_id=task_id,
+        words=[word],
+        metrics_ref=0,
+    )
+
+
+def _wrap_planner_result(
+    out_bytes: bytes | list[int],
+    genome_id: int,
+    creds_token: int,
+    task_id: int,
+) -> KernelBlock:
+    n = len(out_bytes) if out_bytes else 0
+    word = SemanticWord(
+        type_=6,        # RESULT
+        intent=51,      # PLAN_RESULT (GPU)
+        channel=0,
+        priority=128,
+        confidence=60000,
+        payload_ref=n & 0xFFFF,
     ).encode()
     return KernelBlock(
         agent_id=0,
