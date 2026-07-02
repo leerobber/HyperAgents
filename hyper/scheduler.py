@@ -29,6 +29,8 @@ except ImportError:
 _GPU_GRAPH_INTENTS: frozenset[int] = frozenset({41, 43, 44, 45})
 # Planner intents routed to GPU when genome.gpu_enabled + gpu_prefer_planner
 _GPU_PLAN_INTENTS:  frozenset[int] = frozenset({2})
+# GNN embed intents (intent=60) routed when gpu_enabled is set
+_GPU_GNN_INTENTS:   frozenset[int] = frozenset({60})
 
 
 @dataclass
@@ -77,6 +79,24 @@ class HyperScheduler:
         self._unified: Optional["UnifiedGpu"] = (   # type: ignore[type-arg]
             gpu_graph if _HAS_GPU and isinstance(gpu_graph, UnifiedGpu) else None
         )
+        # GNN data — set via load_gnn_data(); used for intent=60 dispatch
+        self._gnn_row_ptr:    list[int]   = []
+        self._gnn_col_idx:    list[int]   = []
+        self._gnn_node_feats: list[float] = []
+        self._gnn_weight:     list[float] = []
+
+    def load_gnn_data(
+        self,
+        row_ptr:    list[int],
+        col_idx:    list[int],
+        node_feats: list[float],
+        weight:     list[float],
+    ) -> None:
+        """Store CSR + feature/weight data for GNN embed dispatch (intent=60)."""
+        self._gnn_row_ptr    = row_ptr
+        self._gnn_col_idx    = col_idx
+        self._gnn_node_feats = node_feats
+        self._gnn_weight     = weight
 
     def load_dgm_graph(self, dgm: "_DgmRuntime") -> None:  # type: ignore[type-arg]
         """Build (or replace) the GpuGraph from a DgmRuntime's current graph state."""
@@ -121,6 +141,19 @@ class HyperScheduler:
             return self._run_gpu_planner_task(
                 genome=genome,
                 intent=intent,
+                creds_token=genome.to_creds_token(),
+                task_id=task_id,
+            )
+
+        # GPU GNN embed path
+        if (
+            self._unified is not None
+            and genome.gpu_enabled
+            and intent in _GPU_GNN_INTENTS
+            and self._gnn_row_ptr
+        ):
+            return self._run_gpu_gnn_task(
+                genome=genome,
                 creds_token=genome.to_creds_token(),
                 task_id=task_id,
             )
@@ -220,6 +253,34 @@ class HyperScheduler:
             fitness_delta=fitness_delta,
         )
 
+    def _run_gpu_gnn_task(
+        self,
+        genome:      AgentGenome,
+        creds_token: int,
+        task_id:     int,
+    ) -> TaskResult:
+        t0 = time.perf_counter()
+        out = self._unified.embed(  # type: ignore[union-attr]
+            self._gnn_row_ptr,
+            self._gnn_col_idx,
+            self._gnn_node_feats,
+            self._gnn_weight,
+        )
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        # fitness = n_nodes embedded (len(out) / embed_dim)
+        fitness_delta = float(len(out)) / 128.0
+        genome.fitness += fitness_delta
+
+        block = _wrap_gnn_result(out, genome.genome_id, creds_token, task_id)
+        return TaskResult(
+            genome_id=genome.genome_id,
+            agent_id=0,
+            task_id=task_id,
+            duration_ms=elapsed_ms,
+            output_words=block.words,
+            fitness_delta=fitness_delta,
+        )
+
     def _run_gpu_planner_task(
         self,
         genome: AgentGenome,
@@ -283,6 +344,24 @@ def _wrap_gpu_result(
         task_id=task_id,
         words=[word],
         metrics_ref=0,
+    )
+
+
+def _wrap_gnn_result(
+    out_floats:  list[float],
+    genome_id:   int,
+    creds_token: int,
+    task_id:     int,
+) -> KernelBlock:
+    n = len(out_floats)
+    word = SemanticWord(
+        type_=6, intent=60, channel=0, priority=128,
+        confidence=60000, payload_ref=n & 0xFFFF,
+    ).encode()
+    return KernelBlock(
+        agent_id=0, genome_id=genome_id,
+        creds_token=creds_token, task_id=task_id,
+        words=[word], metrics_ref=0,
     )
 
 
