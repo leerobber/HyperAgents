@@ -51,6 +51,14 @@ SOVEREIGN_GATEWAY_URL=http://localhost:8000
 
 Routing: RTX 5050 (primary) → Radeon 780M (fallback) → Ryzen CPU (last resort)
 
+See **[docs/architecture/](docs/architecture/README.md)** — the actual
+current code (`agent/llm.py`) doesn't use `SOVEREIGN_GATEWAY_URL` at all;
+it talks directly to a local Qwen2.5 model server via
+`OPENAI_API_BASE=http://localhost:8001/v1`, bypassing the gateway
+entirely. See
+[0002](docs/architecture/0002-direct-model-server-not-gateway.md) for
+why, and the real port-collision risk that creates.
+
 ---
 
 ## Quickstart
